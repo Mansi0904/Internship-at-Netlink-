@@ -1,0 +1,70 @@
+import pandas as pd
+import random
+import plotly_express as px
+import xgboost
+import numpy as np
+import shap
+import matplotlib as plt
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.model_selection import train_test_split
+df = pd.read_excel(r"C:\Users\mansis\Downloads\doctor_dataset 2.xlsx")
+
+
+X = df[['Number of Events Attended', 'Emails Opened', 'Content Interaction', 'Samples Requested', 'Engagement Score']]
+y = df['Stage']
+
+
+cl_cols = df.filter(regex='var').columns
+#X_train, X_test, y_train, y_test = train_test_split(df[cl_cols], df[['class']], test_size=0.33, random_state=42)
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2)
+
+
+classifier = RandomForestClassifier(n_estimators = 10, criterion = 'gini',  max_depth=8)
+classifier.fit(X_train, y_train)
+
+
+def get_ABS_SHAP(df_shap, df):
+
+
+    shap_v = pd.DataFrame(df_shap)
+    feature_list = df.columns
+    shap_v.columns = feature_list
+    df_v = df.copy().reset_index().drop('index', axis=1)
+
+
+    corr_list = list()
+    for i in feature_list:
+        b = np.corrcoef(shap_v[i], df_v[i])[1][0]
+        corr_list.append(b)
+    corr_df = pd.concat([pd.Series(feature_list), pd.Series(corr_list)], axis=1).fillna(0)
+
+
+    corr_df.columns = ['Variable', 'Corr']
+    corr_df['Sign'] = np.where(corr_df['Corr'] > 0, 'red', 'blue')
+
+    shap_abs = np.abs(shap_v)
+    k = pd.DataFrame(shap_abs.mean()).reset_index()
+    k.columns = ['Variable', 'SHAP_abs']
+    k2 = k.merge(corr_df, left_on='Variable', right_on='Variable', how='inner')
+    k2 = k2.sort_values(by='SHAP_abs', ascending=True)
+
+    k2_f = k2[['Variable', 'SHAP_abs', 'Corr']]
+    k2_f['SHAP_abs'] = k2_f['SHAP_abs'] * np.sign(k2_f['Corr'])
+    k2_f.drop(columns='Corr', inplace=True)
+    k2_f.rename(columns={'SHAP_abs': 'SHAP'}, inplace=True)
+
+    return k2_f
+
+shap_values = shap.TreeExplainer(classifier).shap_values(X_test)
+shap.summary_plot(shap_values, X_test)
+foo_all = pd.DataFrame()
+
+for k, v in list(enumerate(classifier.classes_)):
+    foo = get_ABS_SHAP(shap_values[k], X_test)
+    foo['class'] = v
+    foo_all = pd.concat([foo_all, foo])
+
+
+
+px.bar(foo_all, x='SHAP', y='Variable', color='class')
+ 
