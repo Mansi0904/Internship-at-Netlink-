@@ -1,0 +1,96 @@
+import pandas as pd
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.model_selection import train_test_split
+import numpy as np
+import shap
+
+
+df = pd.read_excel(r"C:\Users\mansis\Downloads\doctor_dataset 2 (1).xlsx")
+
+X = df[['Number of Events Attended', 'Emails Opened', 'Content Interaction', 'Samples Requested', 'Engagement Score']]
+y = df['Stage']
+
+
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2)
+
+
+classifier = RandomForestClassifier(n_estimators=10, criterion='gini', max_depth=8)
+classifier.fit(X_train, y_train)
+
+
+shap_values = shap.TreeExplainer(classifier).shap_values(X_test)
+
+
+
+def get_ABS_SHAP(df_shap, df):
+    shap_v = pd.DataFrame(df_shap, columns=df.columns)
+    shap_abs = np.abs(shap_v)
+    shap_signs = np.sign(shap_v)
+
+    shap_df = pd.DataFrame({'Variable': df.columns, 'SHAP_abs': shap_abs.mean(), 'Sign': shap_signs.mean()})
+    shap_df['Sign'] = np.where(shap_df['Sign'] > 0, 'positive', 'negative')
+    shap_df = shap_df.sort_values(by='SHAP_abs', ascending=True)
+
+    shap_df['SHAP'] = shap_df['SHAP_abs'] * shap_df['Sign'].apply(lambda x: 1 if x == 'positive' else -1)
+    shap_df.drop(columns=['SHAP_abs', 'Sign'], inplace=True)
+
+    return shap_df
+
+foo_all = pd.DataFrame()
+
+for k, v in enumerate(classifier.classes_):
+    foo = get_ABS_SHAP(shap_values[k], X_test)
+    foo['class'] = v
+    foo_all = pd.concat([foo_all, foo])
+
+
+def generate_highcharts_script(foo_all):
+
+    categories = list(foo_all['Variable'])
+    series_data = []
+
+    classes = foo_all['class'].unique()
+
+    for cls in classes:
+        data = list(foo_all[foo_all['class'] == cls]['SHAP'])
+        series_data.append({'name': cls, 'data': data})
+
+    highcharts_script = f"""
+    <html>
+    <head>
+        <script src="https://code.highcharts.com/highcharts.js"></script>
+        <script src="https://code.highcharts.com/modules/exporting.js"></script>
+        <script src="https://code.highcharts.com/modules/export-data.js"></script>
+    </head>
+    <body>
+    <div id="container" style="width:100%; height:400px;"></div>
+
+    <script>
+    document.addEventListener('DOMContentLoaded', function () {{
+        Highcharts.chart('container', {{
+            chart: {{
+                type: 'bar'
+            }},
+            title: {{
+                text: 'SHAP Values by Stage'
+            }},
+            xAxis: {{
+                categories: {categories}
+            }},
+            yAxis: {{
+                title: {{
+                    text: 'SHAP Value'
+                }}
+            }},
+            series: {series_data}
+        }});
+    }});
+    </script>
+    </body>
+    </html>
+    """
+    return highcharts_script
+
+highcharts_script = generate_highcharts_script(foo_all)
+
+print(highcharts_script)
