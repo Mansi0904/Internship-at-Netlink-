@@ -1,0 +1,52 @@
+import numpy as np
+import pandas as pd
+import tensorflow as tf
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import Dense
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import LabelEncoder
+from tensorflow.keras.utils import plot_model  
+ 
+ 
+df = pd.read_csv("/content/detect_dataset.csv")
+ 
+X = df[['Ia', 'Ib', 'Ic', 'Va', 'Vb','Vc']]
+y = df['Output (S)']  
+ 
+label_encoder = LabelEncoder()
+y = label_encoder.fit_transform(y)
+ 
+ 
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2)
+ 
+model = Sequential([
+    Dense(128, activation='relu', input_shape=(X_train.shape[1],), name='dense_layer_1'),
+    Dense(10, activation='softmax', name='output_layer')  # Adjust units based on number of classes
+])
+ 
+model.compile(optimizer='adam',
+              loss='sparse_categorical_crossentropy',  # Use sparse categorical crossentropy for integer labels
+              metrics=['accuracy'])
+ 
+model.summary()
+ 
+model.fit(X_train, y_train, epochs=5, verbose=1)
+test_loss, test_acc = model.evaluate(X_test, y_test, verbose=2)
+print(f'Test accuracy: {test_acc}')
+ 
+threshold = 0.8
+ 
+ 
+predictions = model.predict(X_test)
+ 
+ 
+anomalies = []
+for i in range(len(predictions)):
+    max_prob = np.max(predictions[i])
+    if max_prob < threshold:
+        anomalies.append(i)
+ 
+ 
+print(f'Anomalies detected: {anomalies}')
+ 
+plot_model(model, to_file='model_plot.png', show_shapes=True, show_layer_names=True)
