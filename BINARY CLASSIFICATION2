@@ -1,0 +1,79 @@
+import pandas as pd
+import seaborn as sns
+from highcharts_core.chart import Chart
+from highcharts_core.options import HighchartsOptions
+from matplotlib import pyplot as plt
+import numpy as np
+import json
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler
+from sklearn.metrics import confusion_matrix
+from sklearn.linear_model import LogisticRegression
+from sklearn.impute import SimpleImputer
+
+
+df = pd.read_csv(r'C:\Users\mansis\Desktop\train_and_test2.csv')
+
+X = df[['Age', 'Fare', 'Sex', 'sibsp', 'Parch', 'Pclass', 'Embarked']]
+y = df['Survived']
+
+
+imputer = SimpleImputer(strategy='mean')
+X_imputed = imputer.fit_transform(X)
+X_train, X_test, y_train, y_test = train_test_split(X_imputed, y, test_size=0.25, random_state=0)
+scaler = StandardScaler()
+X_train = scaler.fit_transform(X_train)
+X_test = scaler.transform(X_test)
+
+
+classifier = LogisticRegression()
+classifier.fit(X_train, y_train)
+
+
+predictions = classifier.predict(X_test)
+
+
+cm = confusion_matrix(y_test, predictions)
+TN, FP, FN, TP = cm.ravel()
+accuracy = (TP + TN) / (TP + FP + TN + FN)
+
+print('True Positive(TP)  = ', TP)
+print('False Positive(FP) = ', FP)
+print('True Negative(TN)  = ', TN)
+print('False Negative(FN) = ', FN)
+print('Accuracy of the binary classifier = {:0.3f}'.format(accuracy))
+
+
+sns.heatmap(cm, annot=True, fmt='d', cmap='Blues')
+plt.xlabel('Predicted')
+plt.ylabel('Actual')
+plt.title('Confusion Matrix')
+plt.show()
+
+
+options = {
+    'chart': {'type': 'heatmap'},
+    'title': {'text': 'Confusion Matrix'},
+    'xAxis': {'categories': ['Predicted 0', 'Predicted 1']},
+    'yAxis': {'categories': ['Actual 0', 'Actual 1']},
+    'colorAxis': {'minColor': '#FFFFFF', 'maxColor': '#0000FF'},
+    'legend': {'align': 'right', 'layout': 'vertical', 'margin': 0, 'verticalAlign': 'top', 'y': 25, 'symbolHeight': 280},
+    'tooltip': {'pointFormat': "<b>{series.xAxis.categories}[{point.x}]</b>sold<br><b>{point.value}</b> items on <br><b>{series.yAxis.categories}[{point.y}]</b>"},
+    'series': [{
+        'borderWidth': 1,
+        'data': [[0, 0, float(TN)], [1, 0, float(FP)], [0, 1, float(FN)], [1, 1, float(TP)]],
+        'dataLabels': {'enabled': True, 'color': '#000000'}
+    }]
+}
+
+#
+# highcharts_options = HighchartsOptions(options=options)
+
+
+chart = Chart()
+
+print(options)
+chart.options = options
+chart_config = json.dumps(options)
+
+print(chart_config)
